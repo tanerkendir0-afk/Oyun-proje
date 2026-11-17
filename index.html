@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="tr">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Konşimento</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Yerleşim: seyir haritası solda sabit durur, sağda konşimento masası (sekmeler). Telefonda harita üstte, masa altta. */
+:root{
+  --sea:#e4edf0; --paper:#f6f9f8; --raise:#ffffff; --land:#cdbb7c; --ink:#15293a; --muted:#536776;
+  --line:#bccbd2; --depth:#7fb0c6; --magenta:#a81c66; --on-magenta:#ffffff;
+  --good:#1a7146; --warn:#925600; --bad:#b0302a;
+  --c-red:#9a3f30; --c-blue:#1e5c96; --c-green:#2a6a50; --c-orange:#b85c12;
+  --f-display:'Big Shoulders Display','Barlow Condensed','Arial Narrow',sans-serif;
+  --f-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --sea:#0a151e; --paper:#111f2a; --raise:#182a38; --land:#575134; --ink:#dbe6ec; --muted:#8b9eab;
+  --line:#293c4c; --depth:#35657b; --magenta:#ea6cb2; --on-magenta:#1d0a14;
+  --good:#5cc490; --warn:#e2a84e; --bad:#f08077;
+  --c-red:#d67663; --c-blue:#70abe4; --c-green:#68ba97; --c-orange:#e99a52; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --sea:#0a151e; --paper:#111f2a; --raise:#182a38; --land:#575134; --ink:#dbe6ec; --muted:#8b9eab;
+  --line:#293c4c; --depth:#35657b; --magenta:#ea6cb2; --on-magenta:#1d0a14;
+  --good:#5cc490; --warn:#e2a84e; --bad:#f08077;
+  --c-red:#d67663; --c-blue:#70abe4; --c-green:#68ba97; --c-orange:#e99a52; color-scheme:dark }
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--sea);color:var(--ink);font:15px/1.45 var(--f-body);-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+button,select{font:inherit;color:inherit}
+h1,h2,h3,p,ul{margin:0}
+ul{padding:0;list-style:none}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.pos{color:var(--good)} .neg{color:var(--bad)} .warn{color:var(--warn)}
+:focus-visible{outline:2px solid var(--magenta);outline-offset:2px}
+
+/* köprüüstü: üst gösterge şeridi */
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.bridge{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--paper);border-bottom:1px solid var(--ink)}
+.bridge-in{max-width:1360px;margin:0 auto;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-wrap:wrap;align-items:center;gap:8px 22px}
+.mark{font:800 27px/1 var(--f-display);letter-spacing:.05em;display:flex;align-items:center;gap:9px;white-space:nowrap}
+.mark i{width:11px;height:11px;background:var(--magenta);transform:rotate(45deg);flex:none}
+.mark small{font:500 11px/1 var(--f-mono);letter-spacing:.06em;color:var(--muted)}
+.hud{display:flex;flex-wrap:wrap;gap:4px 20px;flex:1;min-width:0}
+.stat{display:flex;flex-direction:column;gap:1px}
+.stat span{font:500 10px/1.2 var(--f-mono);letter-spacing:.08em;color:var(--muted)}
+.stat b{font:500 15px/1.2 var(--f-mono);font-variant-numeric:tabular-nums}
+.bridge-btns{display:flex;gap:8px;margin-left:auto}
+
+.btn{border:1px solid var(--ink);background:transparent;padding:7px 12px;min-height:36px;border-radius:2px;cursor:pointer;font-weight:500;line-height:1.2}
+.btn:hover:not(:disabled){background:var(--ink);color:var(--paper)}
+.btn.go{background:var(--magenta);border-color:var(--magenta);color:var(--on-magenta);font:800 18px/1 var(--f-display);letter-spacing:.06em;padding:8px 16px}
+.btn.go:hover:not(:disabled){filter:brightness(1.12);background:var(--magenta);color:var(--on-magenta)}
+.btn.sm{padding:4px 9px;min-height:30px;font-size:13px}
+.btn.quiet{border-color:var(--line)}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+
+.wrap{max-width:1360px;margin:0 auto;padding-block:16px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:18px;align-items:start}
+.chart-col,.desk{min-width:0}
+@media (min-width:960px){
+  .wrap{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr)}
+  .chart-col{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--hud-h,62px) + 14px)}
+}
+.chart{border:3px double var(--ink);background:var(--sea);line-height:0}
+.chart canvas{display:block;width:100%}
+.chart-foot{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:space-between;margin-top:8px;font-size:12.5px;color:var(--muted)}
+.key{display:flex;flex-wrap:wrap;gap:4px 14px}
+.key span{display:inline-flex;align-items:center;gap:5px}
+.sw{width:9px;height:9px;display:inline-block;flex:none}
+.kicker{font:500 11px/1.2 var(--f-mono);letter-spacing:.1em;color:var(--muted)}
+.notices{margin-top:14px;border-top:1px solid var(--ink);padding-top:10px;display:grid;gap:6px}
+.notice{display:flex;gap:10px;align-items:baseline;font-size:14px}
+.notice b{font-weight:600}
+.notice .num{color:var(--magenta);font-size:12px;white-space:nowrap}
+
+/* giriş */
+.intro h1{font:800 clamp(34px,5vw,54px)/.98 var(--f-display);letter-spacing:.01em;text-wrap:balance;margin:6px 0 12px}
+.intro>p{max-width:60ch}
+.scen{display:grid;gap:14px;margin-top:20px}
+@media (min-width:560px){.scen{grid-template-columns:1fr 1fr}}
+.scen article{border:1px solid var(--ink);background:var(--paper);padding:16px;display:flex;flex-direction:column;gap:10px}
+.scen h2{font:800 30px/1 var(--f-display);letter-spacing:.04em}
+.scen .role{font:500 11px/1.3 var(--f-mono);letter-spacing:.06em;color:var(--magenta)}
+.scen ul{display:grid;gap:6px;font-size:14px;color:var(--muted);flex:1}
+.scen li{padding-left:14px;position:relative}
+.scen li::before{content:"";position:absolute;left:0;top:.58em;width:6px;height:1px;background:var(--ink)}
+.resume{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+/* masa */
+.tabs{display:flex;border-bottom:1px solid var(--ink);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:0;background:transparent;padding:9px 13px 8px;cursor:pointer;font:600 17px/1 var(--f-display);letter-spacing:.07em;white-space:nowrap;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.tab .num{font-size:11px;margin-left:4px}
+.panel{padding-top:14px;display:grid;gap:12px}
+.hint{font-size:13.5px;color:var(--muted)}
+details.how{border:1px dashed var(--line);padding:8px 12px;font-size:14px}
+details.how summary{cursor:pointer;font-weight:600}
+details.how ul{margin-top:8px;display:grid;gap:5px;color:var(--muted)}
+.empty{border:1px dashed var(--line);padding:22px 16px;text-align:center;color:var(--muted)}
+
+/* konşimento formu */
+.bl{border:1px solid var(--ink);background:var(--paper)}
+.bl-head{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid var(--ink)}
+.bl-head .num{font-size:12px;letter-spacing:.04em}
+.stamp{font:800 14px/1 var(--f-display);letter-spacing:.14em;color:var(--magenta);border:1.5px solid var(--magenta);padding:3px 7px 2px;transform:rotate(-3deg)}
+.bl-grid{display:grid;grid-template-columns:1fr 1fr}
+.bl-grid>div{padding:6px 10px;border-bottom:1px solid var(--line);min-width:0;overflow-wrap:anywhere}
+.bl-grid>div:nth-child(odd){border-right:1px solid var(--line)}
+.bl-grid label,.lbl{display:block;font:500 9.5px/1.3 var(--f-mono);letter-spacing:.1em;color:var(--muted)}
+.carrs{display:grid;gap:6px;padding:10px}
+@media (min-width:520px){.carrs{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
+.carr{border:1px solid var(--line);background:var(--raise);padding:8px 10px;text-align:left;cursor:pointer;display:grid;gap:2px;border-radius:2px;font-size:13px;min-width:0}
+.carr:hover:not(:disabled){border-color:var(--ink)}
+.carr:disabled{opacity:.45;cursor:not-allowed}
+.carr b{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px}
+.carr .num{font-size:12px}
+.bl-foot{display:flex;flex-wrap:wrap;gap:8px;padding:0 10px 10px}
+
+.card{border:1px solid var(--line);background:var(--paper);padding:11px 12px;display:grid;gap:8px;min-width:0}
+.card-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;align-items:baseline}
+.card-top h3{font:600 15px/1.25 var(--f-body)}
+.card-top .num{font-size:12.5px}
+.row{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13.5px}
+.row.sp{justify-content:space-between}
+.pill{font:500 11px/1 var(--f-mono);letter-spacing:.04em;padding:4px 7px;border:1px solid currentColor;border-radius:2px;white-space:nowrap}
+.bar{height:7px;background:var(--line);position:relative;min-width:80px;flex:1}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:4px 9px;min-height:30px;cursor:pointer;font-size:13px}
+.seg button+button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+select{background:var(--raise);border:1px solid var(--ink);padding:5px 8px;min-height:32px;border-radius:2px;max-width:100%}
+.spark{color:var(--muted);flex:none}
+.step{display:inline-flex;align-items:center;gap:6px}
+.step .num{min-width:44px;text-align:center}
+.h3{font:600 18px/1.1 var(--f-display);letter-spacing:.08em;margin-top:6px}
+.log li{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.log .num{color:var(--muted);font-size:12px;flex:none;width:34px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 14px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right}
+dl{margin:0}
+
+/* rapor */
+.dlg{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,var(--sea) 72%,transparent);display:flex;align-items:center;justify-content:center;
+  padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.sheet{background:var(--paper);border:3px double var(--ink);width:min(560px,100%);max-height:100%;overflow:auto;padding:18px;display:grid;gap:12px}
+.sheet h2{font:800 30px/1 var(--f-display);letter-spacing:.04em}
+.news{border-left:3px solid var(--magenta);padding:2px 0 2px 10px}
+.news b{display:block;font-weight:600}
+.news span{font-size:13.5px;color:var(--muted)}
+.ledger{display:grid;gap:0;font-size:13.5px}
+.ledger li{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line)}
+.ledger li span:first-child{min-width:0;overflow-wrap:anywhere}
+.ledger .num{white-space:nowrap}
+.totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;border-top:1px solid var(--ink);padding-top:10px}
+.big{font:800 44px/1 var(--f-display);letter-spacing:.02em}
+.sheet-foot{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
+@media (max-width:520px){ .mark{font-size:23px} .mark small{display:none} .stat b{font-size:13.5px} .hud{gap:4px 14px;order:3;flex-basis:100%} }
+</style>
+
+<div id="app" lang="tr">
+  <header class="bridge" id="bridge"><div class="bridge-in">
+    <div class="mark"><i></i>KONŞİMENTO <small id="mode-tag">30 HAFTA · 9 LİMAN · 10 HAT</small></div>
+    <div class="hud" id="hud"></div>
+    <div class="bridge-btns" id="bridge-btns"></div>
+  </div></header>
+  <div class="wrap">
+    <section class="chart-col" aria-label="Seyir haritası">
+      <div class="chart"><canvas id="cv" role="img" aria-label="Limanları ve hatları gösteren dünya haritası"></canvas></div>
+      <div class="chart-foot"><div class="key" id="key"></div><div id="hi-name" class="num"></div></div>
+      <div class="notices" id="notices"></div>
+    </section>
+    <section class="desk" id="desk"></section>
+  </div>
+  <div class="dlg" id="dlg" hidden></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+document.documentElement.lang = 'tr';
+const $ = s => document.querySelector(s);
+const rnd = (a, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+const ri = (a, b) => Math.floor(rnd(a, b + 1));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const nf = new Intl.NumberFormat('tr-TR');
+const money = v => { v = Math.round(v); const s = v < 0 ? '−' : '', a = Math.abs(v);
+  return a >= 1e6 ? `${s}$${(a / 1e6).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Mn` : `${s}$${nf.format(a)}`; };
+const signed = v => (v >= 0 ? '+' : '') + money(v);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const WEEKS = 30;
+
+/* ───────── Dünya: limanlar, hatlar ───────── */
+const PORTS = {
+  SHA: {n: 'Şanghay', lon: 121.8, lat: 31, lab: 'r'}, SIN: {n: 'Singapur', lon: 103.9, lat: 1.2, lab: 'b'},
+  JEA: {n: 'Cebel Ali', lon: 55, lat: 25.1, lab: 'b'}, IST: {n: 'İstanbul', lon: 28.7, lat: 40.9, lab: 't'},
+  RTM: {n: 'Rotterdam', lon: 4, lat: 52, lab: 't'}, NYC: {n: 'New York', lon: -74, lat: 40.5, lab: 'r'},
+  LAX: {n: 'Los Angeles', lon: -118.3, lat: 33.7, lab: 'r'}, SSZ: {n: 'Santos', lon: -46.3, lat: -24, lab: 'r'},
+  DUR: {n: 'Durban', lon: 31.1, lat: -29.9, lab: 'r'},
+};
+const cat = (...a) => { const o = []; a.forEach(s => s.forEach(p => { const q = o[o.length - 1]; if (!(q && p && q[0] === p[0] && q[1] === p[1])) o.push(p); })); return o; };
+const rev = a => a.slice().reverse();
+const shaSin = [[121.8, 31], [123, 27.5], [119.8, 24], [115.5, 20], [111.5, 13], [107.5, 6], [104.8, 1.7], [103.9, 1.2]];
+const malacca = [[103.9, 1.2], [101.6, 1.9], [99.6, 4.4], [96.8, 6.4], [93.5, 6.2], [82, 5.2], [78, 6.5]];
+const toGulf = [[70, 14], [63.5, 21], [60, 24], [57.3, 25.7], [56.6, 26.7], [55.6, 26.1], [55, 25.1]];
+const redSea = [[43.3, 12.6], [41, 16.5], [38.3, 21], [35.6, 26], [33.4, 28.6], [32.5, 30], [32.4, 31.6]];
+const toSuez = cat([[65, 11.5], [52, 13.2], [45.2, 12.1]], redSea);
+const suezIst = [[32.4, 31.6], [29, 33.6], [26.6, 35.5], [25.4, 37.5], [25.7, 39.5], [26.8, 40.4], [28.7, 40.9]];
+const suezGib = [[32.4, 31.6], [25, 34], [17, 35.7], [11.6, 37.7], [5, 37.6], [-2, 36.2], [-5.5, 36]];
+const chan = [[4, 52], [3, 51.7], [1.6, 51.05], [0, 50.3], [-3.5, 49.7], [-6.5, 48.4]];
+const gibRtm = cat([[-5.5, 36], [-8.5, 36.3], [-10.2, 38.5], [-10.3, 43.6]], rev(chan));
+const istGib = [[28.7, 40.9], [26.8, 40.4], [25.7, 39.5], [25, 37.6], [23.2, 35.8], [17, 35.9], [11.6, 37.7], [5, 37.6], [-2, 36.2], [-5.5, 36]];
+const gulfAden = [[55, 25.1], [55.6, 26.1], [56.6, 26.7], [57.3, 25.7], [60.3, 22.8], [59.6, 19], [56, 15.6], [51, 13.4], [45.2, 12.1]];
+const LANES = [
+  {id: 'AE', name: 'Asya – Kuzey Avrupa', a: 'SHA', b: 'RTM', weeks: 4, head: 1800, back: 700, dem: [3200, 1500], suez: true, path: cat(shaSin, malacca, toSuez, suezGib, gibRtm)},
+  {id: 'AM', name: 'Asya – Akdeniz', a: 'SHA', b: 'IST', weeks: 3, head: 1500, back: 600, dem: [1800, 800], suez: true, path: cat(shaSin, malacca, toSuez, suezIst)},
+  {id: 'TP', name: 'Transpasifik', a: 'SHA', b: 'LAX', weeks: 3, head: 1700, back: 500, dem: [2800, 1100], path: [[121.8, 31], [126, 30.3], [132, 30], [142, 34], [152, 38], null, [-128, 37.5], [-122, 34.6], [-118.3, 33.7]]},
+  {id: 'TA', name: 'Transatlantik', a: 'RTM', b: 'NYC', weeks: 2, head: 1100, back: 650, dem: [1300, 800], path: cat(chan, [[-20, 49], [-40, 46.5], [-52, 43.6], [-62, 42.3], [-70, 40.7], [-74, 40.5]])},
+  {id: 'IE', name: 'Akdeniz – Kuzey Avrupa', a: 'IST', b: 'RTM', weeks: 1, head: 450, back: 350, dem: [600, 500], path: cat(istGib, gibRtm)},
+  {id: 'GM', name: 'Körfez – Akdeniz', a: 'JEA', b: 'IST', weeks: 2, head: 800, back: 700, dem: [600, 500], suez: true, path: cat(gulfAden, redSea, suezIst)},
+  {id: 'AG', name: 'Asya – Körfez', a: 'SHA', b: 'JEA', weeks: 2, head: 900, back: 350, dem: [1200, 500], path: cat(shaSin, malacca, toGulf)},
+  {id: 'SA', name: 'Güney Amerika – Avrupa', a: 'SSZ', b: 'RTM', weeks: 3, head: 1300, back: 800, dem: [800, 600], path: cat([[-46.3, -24], [-42.5, -24.6], [-36.5, -18], [-32, -8], [-30, 1], [-27, 12], [-21.5, 22], [-18, 30], [-13, 38], [-10.3, 43.6]], rev(chan))},
+  {id: 'AF', name: 'Asya – Güney Afrika', a: 'SIN', b: 'DUR', weeks: 2, head: 950, back: 400, dem: [500, 280], path: cat(malacca.slice(0, 5), [[80, -5], [62, -19], [50, -27.6], [38, -30.5], [31.1, -29.9]])},
+  {id: 'MU', name: 'Akdeniz – ABD Doğu', a: 'IST', b: 'NYC', weeks: 3, head: 1500, back: 700, dem: [900, 500], path: cat(istGib, [[-10, 36.4], [-30, 38.6], [-50, 40.2], [-65, 40.4], [-74, 40.5]])},
+];
+const LM = Object.fromEntries(LANES.map(l => [l.id, l]));
+const KY = 1.35; // enlem ölçeği (harita 2:1)
+LANES.forEach(l => { // yol geometrisi
+  l.segs = []; l.len = 0;
+  for (let i = 1; i < l.path.length; i++) { const a = l.path[i - 1], b = l.path[i]; if (!a || !b) continue;
+    const len = Math.hypot(b[0] - a[0], (b[1] - a[1]) * KY); l.segs.push({a, b, len}); l.len += len; }
+});
+function posAt(l, f) { let d = clamp(f, 0, 1) * l.len;
+  for (const s of l.segs) { if (d <= s.len) { const t = s.len ? d / s.len : 0; return {lon: s.a[0] + (s.b[0] - s.a[0]) * t, lat: s.a[1] + (s.b[1] - s.a[1]) * t, ang: Math.atan2(-(s.b[1] - s.a[1]) * KY, s.b[0] - s.a[0])}; } d -= s.len; }
+  const s = l.segs[l.segs.length - 1]; return {lon: s.b[0], lat: s.b[1], ang: 0}; }
+const from = (l, d) => PORTS[d ? l.b : l.a].n, to = (l, d) => PORTS[d ? l.a : l.b].n;
+
+/* Kara parçaları (kaba, nokta ızgarasıyla çizilir) */
+const LAND = [
+ [[-128,62],[-128,50],[-124,48],[-124,40],[-120,34],[-117,32.5],[-114,30],[-112,28],[-109,23],[-105,20],[-100,17],[-95,16],[-92,15],[-87,13],[-83,9],[-80,8],[-77,8],[-80,9.5],[-83,11],[-84,15],[-88,16],[-87,21],[-90,21],[-91,18.5],[-95,19],[-97,22],[-97,26],[-94,29.5],[-90,29.5],[-85,30],[-83,29],[-82,26],[-80.5,25],[-80,27],[-81,31],[-78,34],[-76,35],[-75.5,37],[-74,40],[-70,41.5],[-70,43.5],[-67,45],[-64,44],[-61,46],[-65,48],[-60,50],[-56,52],[-60,54],[-62,58],[-65,60],[-64,62]],
+ [[-77,8],[-72,12],[-68,11.5],[-62,10.5],[-60,8.5],[-52,5],[-50,0],[-44,-2.5],[-38,-4],[-35,-7],[-37,-12],[-39,-17],[-41,-22],[-46,-24],[-48.5,-27],[-52,-33],[-57,-36],[-62,-39],[-65,-42],[-73,-42],[-73,-37],[-71,-30],[-70,-20],[-75,-14],[-79,-8],[-81,-5],[-80,-2],[-78,1],[-77,4],[-78,7]],
+ [[21,62],[152,62],[152,59.5],[142,59],[135,54.5],[141,53],[140,48],[135,43.5],[132,43],[130,42],[128,39.5],[129.5,37],[129,35],[126.5,34.5],[126,37],[125,39.5],[121.5,39],[122,40.5],[118,39],[119,37.5],[122.5,37],[119.5,35],[121,32],[122,30],[120,27],[118,24.5],[114,22.5],[110,21],[108.5,21.5],[106,19.5],[108.5,16],[109.3,12.5],[107,10.5],[105,9],[104.8,10.2],[102.5,12],[100.5,13.5],[99.5,11],[100.5,7],[103,5],[104,1.5],[101.5,2.8],[100.3,5.5],[98.3,8],[98.5,12],[97.5,16.5],[94.5,16],[94,19],[92,21.5],[90,22],[87,21],[85,19.5],[82,16.5],[80,14],[80,10.5],[77.5,8],[76,10.5],[74,15],[73,19],[72.5,21],[70,21],[69,22.3],[67,24.5],[62,25],[57.5,25.5],[56.5,27],[54,26.6],[51,28],[50,30],[48,30],[48.5,28.5],[50,26.5],[51.5,25],[54,24],[56,25],[56.3,26.3],[57,24],[59.8,22.5],[58.5,20.5],[57.5,18.5],[55,17],[52,16],[48.5,14],[45,12.8],[43.3,12.9],[42.7,15],[41,18],[39,21.5],[37.5,24.5],[35,28],[34.8,29.5],[34.3,28],[32.7,30],[32.5,31.2],[34.3,31.3],[35,33],[36,36],[36,36.8],[33,36.2],[30.5,36.5],[28,36.7],[26.5,38.5],[26.5,40],[29.3,41.1],[31.5,41.2],[35,42],[38,41],[41.5,41.5],[41,43],[37,45],[39,47],[35,46],[33.5,45],[33,46],[30.5,46.3],[29.5,45],[28.5,43.5],[28,42],[28.6,41.3],[27,40.8],[26,40.7],[24,40.7],[23,40.2],[22.7,39.3],[24,38],[23,36.5],[21.7,36.8],[21.2,38.3],[19.5,40.5],[19.5,42],[16,43.5],[13.6,45.6],[12.3,45.3],[12.5,44],[14,42.3],[16,41.8],[18.4,40],[16.6,38.9],[16,38],[15.7,40],[14.3,40.8],[12.3,41.8],[10.5,43],[8.8,44.4],[7.5,43.8],[5,43.3],[3.2,43.2],[3.2,41.8],[0.8,41],[-0.3,39.5],[-0.5,38.3],[-2,36.8],[-5.3,36.1],[-6.3,36.8],[-8.9,37],[-9.4,38.7],[-8.8,41.5],[-9.2,43],[-8,43.7],[-2,43.4],[-1.2,46],[-2.8,47.5],[-4.7,48.4],[-1.6,48.6],[-1.5,49.6],[0.2,49.6],[1.6,50.9],[3.5,51.5],[4.3,52.2],[5,53.3],[8,53.6],[8.6,55.5],[8.2,57],[10.5,57.6],[10,55.5],[11,54],[14,54],[18.5,54.7],[19.5,54.4],[21,55.5],[21,57],[24,57.3],[23.5,59],[28,59.6],[30,60],[28,60.5],[23,60],[21.5,60.6]],
+ [[5,62],[5,59],[7,58],[10,59],[11,58.5],[12.5,56],[14,55.5],[16,56.5],[18.5,59.5],[17.5,62]],
+ [[-5.5,50],[1.3,51.2],[1.7,52.7],[0,53.6],[-1.5,55],[-2,57.5],[-3.5,58.6],[-5,58.5],[-6,56.5],[-5,54.8],[-3,54],[-4.5,53.3],[-5,51.7],[-3,51.3]],
+ [[-10,52],[-6.2,52.2],[-6,54],[-7.5,55.2],[-10,54]],
+ [[-5.5,35.9],[-2,35.2],[3,36.8],[10,37.2],[11,33.8],[15,32.3],[20,32.8],[19.5,30.5],[23,32.6],[29,31],[32.2,31.2],[32.4,29.9],[34,27],[35.5,24],[37,21],[38.5,18],[40,15],[43,12.2],[43.3,11.4],[47,11.2],[51.2,12],[50.5,9],[48,5],[45,2],[42,-1],[40.5,-3],[39,-6],[40.5,-10.5],[40.5,-15],[37,-17.5],[35,-20],[35.5,-24],[32.8,-26],[32.5,-28.5],[31,-30],[28,-33],[25.5,-34],[20,-34.8],[18.4,-34.2],[18,-32],[16,-28.5],[14.5,-22.5],[12,-17.5],[13.5,-12],[12.3,-6],[9.5,-1],[9.5,3.8],[7,4.4],[4.5,6.3],[-2,5],[-7.5,4.4],[-11,6.8],[-13.3,9],[-16.5,12],[-17.3,14.7],[-16.3,19],[-17,21],[-15,24.5],[-13,27.7],[-10,29.5],[-9.6,32],[-6.5,34.2]],
+ [[49.3,-12],[50.3,-15.5],[47.5,-25],[45,-25.3],[43.5,-22.5],[44.3,-17],[47,-15]],
+ [[80,9.7],[81.8,7.5],[81,6],[79.8,6.5]],
+ [[95.3,5.6],[98,4],[103.5,-1],[106,-3],[105.7,-5.8],[104.5,-5.7],[101,-3],[98.5,1.5],[95.5,5]],
+ [[105.3,-6],[108.5,-6.6],[113,-6.9],[114.5,-7.8],[114.5,-8.7],[108,-7.8],[105.5,-6.9]],
+ [[109,1.7],[111,1.7],[113,3.2],[115.5,5],[117,7],[119,5],[117.8,3.5],[118.8,1],[116.5,-3.8],[114.5,-4],[111.5,-3.3],[110,-1.5],[109,0.3]],
+ [[119.5,0.8],[123.5,1],[125,1.5],[121,-0.8],[123,-4.5],[120.3,-5.5],[119.5,-3.3]],
+ [[120.5,18.5],[122.2,18.3],[122,16],[124,13.5],[121,13.6],[120,16]],
+ [[122,7],[125.5,9.7],[126.5,7],[125.3,5.8],[123.5,7.5]],
+ [[121.5,25.2],[121.9,24.5],[120.8,22],[120.1,23],[120.8,24.8]],
+ [[130,33.5],[131,31.2],[132,33],[135.5,33.5],[137,34.6],[140,35.2],[141,36.5],[142,39.5],[141.3,41.4],[140,41],[139.5,38.5],[136.7,37],[133,35.5],[131,34.3]],
+ [[140,41.6],[141,42.5],[143.3,42],[145.5,43.3],[144.3,44],[142,45.5],[141.5,43.5],[140.3,43]],
+ [[131,-0.8],[134,-0.8],[137.5,-1.7],[141,-2.6],[145,-4.5],[147,-6],[150.5,-10.3],[147,-9.5],[143,-8.5],[140.5,-8.5],[138,-8],[137.5,-5.3],[133.5,-4],[132,-2.8]],
+ [[114,-22],[116,-20.5],[121,-19.5],[123,-17],[126,-14],[129,-15],[130.5,-12.3],[133,-12],[136.5,-12],[136,-15],[140,-17.5],[141.5,-13],[142.5,-10.8],[145.3,-15],[146.5,-19],[150,-22.5],[152,-25],[152,-33],[151,-34],[150,-37.5],[146,-39],[143.5,-38.8],[140,-38],[138,-35.5],[137.5,-33],[136,-35],[134,-33],[131,-31.5],[126,-32.3],[123.5,-34],[118,-35],[115,-34.3],[115.8,-31.5],[113.5,-26]],
+ [[-85,22],[-80,23.2],[-75,20.8],[-74.2,20.1],[-77.5,19.9],[-78,21.5],[-82,22.5]],
+ [[-74.4,19.7],[-70,19.9],[-68.4,18.6],[-71.5,17.8],[-74.4,18.4]],
+ [[-59,47.7],[-53,46.7],[-52.7,48.5],[-55.5,51.5],[-57.5,50.5]],
+ [[-52,62],[-44,59.8],[-41,62]],
+];
+const WATER = [[[47,47],[53,46.5],[54,40],[53.5,37],[50,37],[49,40],[47,43]], [[-94,62],[-78,62],[-78,56],[-80,51.5],[-82,55],[-93,58]]];
+const inPoly = (p, x, y) => { let c = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) { const a = p[i], b = p[j];
+  if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
+const VIEW = {lon0: -128, lon1: 152, lat0: -42, lat1: 62};
+const DOTS = []; { const dl = 1.75, dt = dl * 104 / 140; let r = 0;
+  for (let lat = VIEW.lat1 - dt / 2; lat > VIEW.lat0; lat -= dt, r++) for (let lon = VIEW.lon0 + dl / 2 + (r % 2 ? dl / 2 : 0); lon < VIEW.lon1; lon += dl)
+    if (LAND.some(p => inPoly(p, lon, lat)) && !WATER.some(p => inPoly(p, lon, lat))) DOTS.push([lon, lat]); }
+
+/* ───────── Piyasa ve olaylar ───────── */
+const EV = {
+  suez: {w: 1.1, dur: 3, idx: .45, hold: 2, hit: 2, lanes: () => LANES.filter(l => l.suez).map(l => l.id), title: () => 'Süveyş Kanalı kapandı', text: 'Kanalda karaya oturan bir gemi geçişi kesti. Süveyş hatlarında seferler 2 hafta uzuyor, navlunlar tırmanıyor.'},
+  strike: {w: 2, dur: 2, idx: .15, hold: 1, hit: 1, port: true, title: p => `${p} limanında grev`, text: 'Liman işçileri iş bıraktı. Bu limana bağlı hatlarda seferler 1 hafta uzuyor.'},
+  storm: {w: 3, dur: 1, idx: .05, hit: 1, lane: true, title: l => `${l} hattında fırtına`, text: 'Yoldaki gemiler rota değiştirdi, 1 hafta rötar var.'},
+  bunkerUp: {w: 1.5, dur: 4, bunker: .3, title: () => 'Yakıt fiyatı sıçradı', text: 'Bunker dört hafta boyunca pahalı. Tam yol giden gemi kasayı yakar.'},
+  bunkerDown: {w: 1, dur: 4, bunker: -.2, title: () => 'Yakıt ucuzladı', text: 'Bunker fiyatları dört hafta boyunca düşük seyredecek.'},
+  peak: {w: 1.6, dur: 4, idx: .22, dem: 1.35, title: () => 'Yüksek sezon başladı', text: 'Perakendeciler stok yapıyor. Dört hafta boyunca yük bol, navlun yüksek.'},
+  slump: {w: 1.5, dur: 4, idx: -.2, dem: .72, title: () => 'Talep daralıyor', text: 'Siparişler zayıfladı. Dört hafta boyunca daha az yük, daha düşük navlun.'},
+  glut: {w: 1, dur: 5, idx: -.14, title: () => 'Piyasaya yeni tonaj girdi', text: 'Tersanelerden çıkan gemiler kapasiteyi artırdı, navlunlar baskı altında.'},
+};
+const newMarket = () => { const idx = {}, hist = {}; LANES.forEach(l => { idx[l.id] = 1; hist[l.id] = [1]; }); return {idx, hist, bunker: 600, ev: []}; };
+const affects = (e, l) => !e.lanes || e.lanes.includes(l.id);
+const rate = (G, l, d) => Math.round((d ? l.back : l.head) * G.m.idx[l.id] / 10) * 10;
+const laneWeeks = (G, l) => l.weeks + G.m.ev.reduce((s, e) => s + (e.hold && affects(e, l) ? e.hold : 0), 0);
+const demMult = G => G.m.ev.reduce((s, e) => s * (e.dem || 1), 1);
+const avgIdx = G => LANES.reduce((s, l) => s + G.m.idx[l.id], 0) / LANES.length;
+function spawnEvent(G) {
+  const act = k => G.m.ev.some(e => e.k === k);
+  const pool = Object.keys(EV).filter(k => !act(k) && !(k === 'peak' && act('slump')) && !(k === 'slump' && act('peak')) && !(k === 'bunkerUp' && act('bunkerDown')) && !(k === 'bunkerDown' && act('bunkerUp')));
+  let t = rnd(pool.reduce((s, k) => s + EV[k].w, 0)), k = pool[0]; for (const q of pool) { t -= EV[q].w; if (t <= 0) { k = q; break; } }
+  const d = EV[k], e = {k, left: d.dur, idx: d.idx || 0, dem: d.dem || 0, bunker: d.bunker || 0, hold: d.hold || 0, hit: d.hit || 0, text: d.text};
+  if (d.lanes) { e.lanes = d.lanes(); e.title = d.title(); }
+  else if (d.port) { const p = pick(Object.keys(PORTS)); e.lanes = LANES.filter(l => l.a === p || l.b === p).map(l => l.id); e.title = d.title(PORTS[p].n); }
+  else if (d.lane) { const l = pick(LANES); e.lanes = [l.id]; e.title = d.title(l.name); }
+  else e.title = d.title();
+  return e;
+}
+function stepMarket(G, R) {
+  G.m.ev = G.m.ev.filter(e => --e.left > 0);
+  if (G.week >= 2 && Math.random() < .42) { const e = spawnEvent(G); G.m.ev.push(e); R.news.push({title: e.title, text: e.text});
+    if (e.hit) { let n = 0;
+      if (G.mode === 'fwd') G.sh.forEach(s => { if (e.lanes.includes(s.lane)) { s.left += e.hit; s.delayed = true; n++; } });
+      else G.fleet.forEach(s => { if (s.state === 'sea' && e.lanes.includes(s.lane)) { s.left += e.hit; s.total += e.hit; s.late = true; n++; } });
+      if (n) R.note(G.mode === 'fwd' ? `${n} sevkiyatın ${e.hit} hafta gecikecek` : `${n} gemin ${e.hit} hafta rötar yapacak`, 'bad'); } }
+  LANES.forEach(l => { const t = 1 + G.m.ev.reduce((s, e) => s + (affects(e, l) ? e.idx : 0), 0);
+    G.m.idx[l.id] = clamp(G.m.idx[l.id] + (t - G.m.idx[l.id]) * .4 + rnd(-.05, .05), .5, 2.4); G.m.hist[l.id].push(G.m.idx[l.id]); if (G.m.hist[l.id].length > 16) G.m.hist[l.id].shift(); });
+  const bt = 600 * (1 + G.m.ev.reduce((s, e) => s + e.bunker, 0)); G.m.bunker = Math.round(G.m.bunker + (bt - G.m.bunker) * .5 + rnd(-15, 15));
+}
+function mkReport(G) { return {week: G.week, news: [], lines: [], inc: 0, exp: 0,
+  pay(t, a, tone) { a = Math.round(a); if (!a) return; G.cash += a; if (a >= 0) this.inc += a; else this.exp -= a; this.lines.push({t, a, tone}); },
+  note(t, tone) { this.lines.push({t, tone}); G.log.unshift({w: G.week, t, tone}); }}; }
+function closeReport(G, R) { R.news.forEach(n => G.log.unshift({w: R.week, t: n.title, tone: 'ev'})); if (G.log.length > 60) G.log.length = 60; }
+
+/* ───────── Senaryo 1: Aracı (forwarder) ───────── */
+const CARR = [
+  {id: 'P', name: 'Poyraz Line', mult: .84, ok: .66, maxDelay: 3, col: '--c-red'},
+  {id: 'M', name: 'Meridyen Denizcilik', mult: 1, ok: .86, maxDelay: 2, col: '--c-blue'},
+  {id: 'K', name: 'Kutup Yıldızı', mult: 1.17, ok: .97, maxDelay: 1, col: '--c-green'},
+  {id: 'B', name: 'Blok yer (kontrat)', mult: 0, ok: .9, maxDelay: 2, col: '--c-orange'},
+];
+const CM = Object.fromEntries(CARR.map(c => [c.id, c]));
+const SHIPPERS = {
+  SHA: [['Delta Elektronik', 'Lotus Oyuncak', 'Jade Mobilya', 'Sarı Nehir Tekstil'], ['Elektronik', 'Oyuncak', 'Mobilya', 'Hazır giyim', 'Güneş paneli', 'LED aydınlatma']],
+  SIN: [['Merlion Kimya', 'Malakka Kauçuk'], ['Doğal kauçuk', 'Palm yağı', 'Elektronik kart']],
+  JEA: [['Körfez Polimer FZE', 'Hurma Vadisi'], ['Polietilen granül', 'Alüminyum külçe', 'Hurma']],
+  IST: [['Karayel Fındık', 'Yedi Tepe Tekstil', 'Marmara Beyaz Eşya', 'Kıyı Seramik', 'Anadolu Oto Yan Sanayi'], ['Fındık içi', 'Hazır giyim', 'Buzdolabı', 'Seramik karo', 'Oto yedek parça', 'Mermer blok', 'Kuru kayısı']],
+  RTM: [['Rhein Makine', 'Delfshaven Kimya', 'Kuzey Süt Ürünleri'], ['Takım tezgâhı', 'Boya hammaddesi', 'Süt tozu', 'Oto parçası']],
+  NYC: [['Hudson Kâğıt', 'Liberty Medikal'], ['Hurda kâğıt', 'Tıbbi cihaz', 'Pamuk balyası']],
+  LAX: [['Pasifik Badem', 'Sierra Geri Dönüşüm'], ['Badem', 'Hurda kâğıt', 'Yonca balyası']],
+  SSZ: [['Santos Kahve İhracat', 'Paraná Tavukçuluk'], ['Yeşil kahve', 'Dondurulmuş tavuk (reefer)', 'Şeker', 'Portakal suyu konsantresi']],
+  DUR: [['Natal Narenciye', 'Zulu Maden'], ['Portakal (reefer)', 'Krom cevheri', 'Şarap']],
+};
+const FW = {customs: {n: 'Gümrük müşavirliği', cost: 25000, wk: 1000, d: 'Her teslimatta TEU başına +$90 hizmet geliri.'},
+  ins: {n: 'Yük sigortası poliçesi', cost: 15000, wk: 800, d: 'Gecikme cezaları yarıya iner.'},
+  track: {n: 'Canlı takip sistemi', cost: 20000, wk: 500, d: 'Zamanında teslimde itibar +2 (normalde +1), gecikmede kayıp azalır.'}};
+const F_TIERS = [[150000, 'Ayakta kaldın'], [250000, 'Sağlam acente'], [380000, 'Navlun ustası']];
+const LV = {K: 21, N: 25, S: 30, U: 32};
+function cntNo() { let s = 'KNSU'; for (let i = 0; i < 6; i++) s += ri(0, 9); let sum = 0; // ISO 6346 kontrol hanesi
+  for (let i = 0; i < 10; i++) sum += (LV[s[i]] ?? +s[i]) * 2 ** i; return `${s.slice(0, 4)} ${s.slice(4)} ${sum % 11 % 10}`; }
+const cRate = (mk, c) => Math.round(mk * c.mult / 10) * 10;
+const fixedF = G => 4500 + 1800 * G.reps + Object.keys(FW).reduce((s, k) => s + (G.up[k] ? FW[k].wk : 0), 0);
+const recvF = G => G.sh.reduce((s, x) => s + x.rev, 0);
+const valueF = G => G.cash + recvF(G);
+function newForwarder() { const G = {mode: 'fwd', week: 1, cash: 100000, credit: 50000, rep: 50, reps: 1, up: {}, offers: [], sh: [], contracts: [], m: newMarket(), log: [], hist: [100000], seq: 1,
+  st: {del: 0, late: 0, teu: 0}}; genOffers(G); return G; }
+function genOffers(G) {
+  const n = Math.min(9, 3 + G.reps + Math.floor(G.rep / 30)); G.offers = [];
+  const pool = LANES.flatMap(l => Array(l.dem[0] > 1500 ? 3 : 2).fill(l)).concat(Array(4).fill(LM.IE), Array(3).fill(LM.GM), Array(3).fill(LM.MU));
+  for (let i = 0; i < n; i++) { const l = pick(pool), dir = Math.random() < .68 ? 0 : 1, org = dir ? l.b : l.a, [cs, gs] = SHIPPERS[org];
+    const slack = pick([0, 1, 1, 2, 2]), mk = rate(G, l, dir);
+    G.offers.push({id: G.seq++, no: cntNo(), lane: l.id, dir, cust: pick(cs), cargo: pick(gs), teu: Math.max(1, Math.ceil(Math.pow(Math.random(), 1.5) * (6 + G.rep / 4))),
+      price: Math.round(mk * (1.08 + rnd(.3) + (slack ? 0 : .1)) / 10) * 10, dl: laneWeeks(G, l) + slack, urgent: !slack}); }
+}
+function offerRev(G, o) { return o.teu * (o.price + (G.up.customs ? 90 : 0)); }
+function book(G, id, cid) { const o = G.offers.find(x => x.id === id); if (!o) return; const l = LM[o.lane], c = CM[cid];
+  let cost = 0;
+  if (cid === 'B') { const k = G.contracts.find(x => x.lane === o.lane && x.cap - x.used >= o.teu); if (!k || o.dir) return; k.used += o.teu; }
+  else { cost = o.teu * cRate(rate(G, l, o.dir), c); if (G.cash - cost < -G.credit) return; G.cash -= cost; }
+  const t = laneWeeks(G, l);
+  G.sh.push({id: o.id, no: o.no, lane: o.lane, dir: o.dir, cust: o.cust, cargo: o.cargo, teu: o.teu, rev: offerRev(G, o), cost, c: cid, left: t, total: t, due: G.week + o.dl,
+    hid: Math.random() < c.ok ? 0 : ri(1, c.maxDelay), delayed: false});
+  G.offers = G.offers.filter(x => x !== o); }
+function nego(G, id) { const o = G.offers.find(x => x.id === id); if (!o || o.nego) return ''; o.nego = true;
+  if (Math.random() < .3 + G.rep / 170) { o.price = Math.round(o.price * 1.1 / 10) * 10; return `${o.cust} zammı kabul etti.`; }
+  if (Math.random() < .45) { G.offers = G.offers.filter(x => x !== o); return `${o.cust} masadan kalktı.`; }
+  return `${o.cust} fiyatta direndi. Son teklif bu.`; }
+function buyContract(G, lid, cap) { const l = LM[lid]; if (G.contracts.some(c => c.lane === lid)) return; const r = Math.round(rate(G, l, 0) * .82 / 10) * 10;
+  if (G.cash - cap * r < -G.credit) return; G.cash -= cap * r; G.contracts.push({lane: lid, cap, rate: r, left: 8, used: 0}); }
+function endWeekF(G) { const R = mkReport(G);
+  R.pay('Ofis, maaşlar ve hizmet giderleri', -fixedF(G));
+  for (const s of G.sh.slice()) { if (--s.left > 0) continue;
+    if (s.hid > 0) { s.left = s.hid; s.total += s.hid; R.note(`${CM[s.c].name} rötar bildirdi: ${s.cust}, +${s.hid} hafta`, 'bad'); s.hid = 0; s.delayed = true; continue; }
+    const late = Math.max(0, G.week + 1 - s.due); G.sh = G.sh.filter(x => x !== s); G.st.del++; G.st.teu += s.teu;
+    R.pay(`Teslim: ${s.cust} · ${s.teu} TEU ${to(LM[s.lane], s.dir)}`, s.rev);
+    if (late) { G.st.late++; R.pay(`Gecikme cezası (${late} hafta)`, -Math.min(.6, .12 * late * (G.up.ins ? .5 : 1)) * s.rev, 'bad'); G.rep = clamp(G.rep - (G.up.track ? 3 : 4) * late, 0, 100); }
+    else G.rep = clamp(G.rep + (G.up.track ? 2 : 1), 0, 100); }
+  if (G.cash < 0) R.pay('Kredi faizi (%1)', G.cash * .01);
+  if (Math.random() < .1 && G.sh.length) { const s = pick(G.sh); s.left++; s.total++; s.delayed = true; R.note(`Gümrük denetimi: ${s.cust} yükü 1 hafta bekleyecek`, 'bad'); }
+  stepMarket(G, R);
+  G.contracts = G.contracts.filter(c => { c.used = 0; if (--c.left <= 0) { R.note(`${LM[c.lane].name} blok yer anlaşması sona erdi`); return false; } R.pay(`Blok yer: ${LM[c.lane].name} (${c.cap} TEU)`, -c.cap * c.rate); return true; });
+  G.week++; genOffers(G); G.hist.push(valueF(G)); closeReport(G, R);
+  if (G.cash < -G.credit) G.over = 'bust'; else if (G.week > WEEKS) G.over = 'done';
+  return R; }
+
+/* ───────── Senaryo 2: Armatör (hat operatörü) ───────── */
+const CLS = {
+  F: {n: 'Feeder', cap: 1100, price: 4e6, fuel: 25, opex: 35e3, port: 30e3, canal: 80e3},
+  S: {n: 'Sub-Panamax', cap: 2500, price: 8.5e6, fuel: 46, opex: 48e3, port: 50e3, canal: 180e3},
+  P: {n: 'Panamax', cap: 4200, price: 14e6, fuel: 70, opex: 60e3, port: 70e3, canal: 300e3},
+  N: {n: 'Neo-Panamax', cap: 9000, price: 30e6, fuel: 120, opex: 85e3, port: 140e3, canal: 550e3},
+};
+const SPD = {e: {n: 'Ekonomik', dw: 1, fm: .62}, n: {n: 'Normal', dw: 0, fm: 1}, f: {n: 'Tam yol', dw: -1, fm: 1.7}};
+const WINDS = ['Lodos', 'İmbat', 'Karayel', 'Yıldız', 'Keşişleme', 'Gündoğusu', 'Samyeli', 'Meltem', 'Günbatısı', 'Bora', 'Kıble', 'Etezyen'];
+const C_TIERS = [[35e6, 'Suyun üstünde'], [50e6, 'Düzenli hat operatörü'], [70e6, 'Okyanus armatörü']];
+const valF = G => .75 + .25 * avgIdx(G);
+const shipVal = (G, s) => s.hire ? 0 : CLS[s.cls].price * valF(G) * .92;
+const fleetVal = G => G.fleet.reduce((s, x) => s + shipVal(G, x), 0);
+const netC = G => G.cash + fleetVal(G) - G.debt;
+const loanCap = G => Math.floor(fleetVal(G) * .5 / 1e6) * 1e6;
+const pf = p => Math.min(2.2, Math.pow(1 / p, 2.5));
+const inflow = (G, l, d) => l.dem[d] * demMult(G) * pf(G.price[l.id]) * (.6 + G.rep / 150);
+function mkShip(G, cls, hire) { const used = G.fleet.map(s => s.name); const nm = WINDS.find(w => !used.includes('M/V ' + w)) || 'Rüzgâr ' + G.seq;
+  return {id: G.seq++, name: 'M/V ' + nm, cls, hire: hire || 0, until: hire ? G.week + 6 : 0, lane: null, dir: 0, state: 'idle', left: 0, total: 0, load: 0, speed: 'n', vs: 'n', next: null, late: false}; }
+function newCarrier() { const G = {mode: 'car', week: 1, cash: 1e6, debt: 0, rep: 60, price: {}, pool: {}, fleet: [], list: [], m: newMarket(), log: [], hist: [], seq: 1, st: {teu: 0, cap: 0, voy: 0, late: 0}};
+  LANES.forEach(l => { G.price[l.id] = 1; G.pool[l.id] = [l.dem[0] * 2, l.dem[1] * 2]; });
+  const a = mkShip(G, 'F'); G.fleet.push(a); const b = mkShip(G, 'S'); G.fleet.push(b);
+  a.lane = 'IE'; b.lane = 'AM'; depart(G, a); depart(G, b); genList(G); G.hist.push(netC(G)); return G; }
+function depart(G, sh, R, agg) { const l = LM[sh.lane], c = CLS[sh.cls], d = sh.dir, pool = G.pool[l.id];
+  const load = Math.min(c.cap, Math.floor(pool[d])); pool[d] -= load;
+  const rev = load * Math.round(rate(G, l, d) * G.price[l.id]);
+  const cost = c.port + 40 * load + (l.suez && !G.m.ev.some(e => e.k === 'suez') ? c.canal : 0);
+  sh.vs = sh.speed; sh.state = 'sea'; sh.left = sh.total = Math.max(1, laneWeeks(G, l) + SPD[sh.vs].dw); sh.load = load; sh.late = false;
+  G.st.teu += load; G.st.cap += c.cap;
+  if (R) { R.pay(`${sh.name} · ${from(l, d)} → ${to(l, d)} · ${nf.format(load)}/${nf.format(c.cap)} TEU`, rev); agg.port += cost; } else G.cash += rev - cost; }
+function genList(G) { const ks = Object.keys(CLS), v = valF(G);
+  const mk = type => { const cls = pick(ks), p = CLS[cls].price * v; return {id: G.seq++, cls, type, price: type === 'sale' ? Math.round(p * rnd(.9, 1.12) / 1e5) * 1e5 : Math.round(p * .035 * rnd(.9, 1.15) / 1e3) * 1e3}; };
+  G.list = [mk('sale'), mk('charter'), mk(Math.random() < .5 ? 'sale' : 'charter')]; }
+function assign(G, id, v) { const s = G.fleet.find(x => x.id === id); if (!s) return;
+  if (s.state === 'sea') s.next = v === s.lane ? null : v;
+  else if (!v) { s.state = 'idle'; s.lane = null; s.left = 0; }
+  else { s.lane = v; s.state = 'repo'; s.left = s.total = 1; s.dir = 0; s.vs = s.speed; s.next = null; } }
+function endWeekC(G) { const R = mkReport(G), agg = {fuel: 0, opex: 0, hire: 0, port: 0};
+  LANES.forEach(l => [0, 1].forEach(d => { const g = inflow(G, l, d); G.pool[l.id][d] = Math.min(G.pool[l.id][d] + g, g * 3); }));
+  for (const s of G.fleet) { const c = CLS[s.cls]; agg.opex += c.opex; agg.hire += s.hire;
+    if (s.state === 'idle') continue;
+    agg.fuel += c.fuel * 7 * G.m.bunker * SPD[s.vs].fm;
+    if (--s.left > 0) continue;
+    if (s.state === 'sea') { G.st.voy++;
+      if (s.late) { G.st.late++; G.rep = clamp(G.rep - 3, 0, 100); R.note(`${s.name} ${to(LM[s.lane], s.dir)} limanına rötarlı vardı`, 'bad'); } else G.rep = clamp(G.rep + .5, 0, 100);
+      s.dir = 1 - s.dir; s.load = 0;
+      if (s.next !== null) { const nx = s.next; s.next = null; if (!nx) { s.state = 'idle'; s.lane = null; continue; } s.lane = nx; s.state = 'repo'; s.left = s.total = 1; s.dir = 0; continue; } }
+    else s.dir = 0;
+    depart(G, s, R, agg); }
+  R.pay('Liman, elleçleme ve kanal ücretleri', -agg.port); R.pay('Yakıt', -agg.fuel); R.pay('Mürettebat ve bakım', -agg.opex); R.pay('Gemi kirası', -agg.hire);
+  if (G.debt) R.pay('Kredi faizi (%0,3)', -G.debt * .003);
+  if (G.cash < 0) R.pay('Kasa açığı faizi (%1)', G.cash * .01);
+  const sea = G.fleet.filter(s => s.state === 'sea');
+  if (Math.random() < .08 && sea.length) { const s = pick(sea), c = CLS[s.cls]; s.left++; s.total++; s.late = true; R.pay(`${s.name} makine arızası: onarım`, -c.opex * 3, 'bad'); }
+  stepMarket(G, R); genList(G);
+  G.week++; G.hist.push(netC(G)); closeReport(G, R);
+  if (G.cash < -2e6) G.over = 'bust'; else if (G.week > WEEKS) G.over = 'done';
+  return R; }
+
+/* ───────── Arayüz durumu ───────── */
+const S = {G: null, tab: '', hi: null, flash: '', anim: null, prev: null, demoT: 0};
+const SAVE = 'konsimento-kayit';
+const store = {get() { try { return JSON.parse(localStorage.getItem(SAVE)); } catch { return null; } },
+  set(G) { try { G ? localStorage.setItem(SAVE, JSON.stringify(G)) : localStorage.removeItem(SAVE); } catch {} }};
+const tiers = G => G.mode === 'fwd' ? F_TIERS : C_TIERS;
+const score = G => G.mode === 'fwd' ? valueF(G) : netC(G);
+const tabsFor = G => G.mode === 'fwd'
+  ? [['offers', 'TALEPLER', G.offers.length], ['ships', 'SEVKİYATLAR', G.sh.length], ['market', 'PİYASA'], ['firm', 'ŞİRKET'], ['log', 'GÜNLÜK']]
+  : [['fleet', 'FİLO', G.fleet.length], ['lanes', 'HATLAR'], ['yard', 'TERSANE', G.list.length], ['log', 'GÜNLÜK']];
+
+function spark(a, w = 84, h = 22) { a = a.slice(-16); if (a.length < 2) a = [a[0], a[0]]; const mn = Math.min(...a), mx = Math.max(...a), sp = mx - mn || 1;
+  const pts = a.map((v, i) => [(i / (a.length - 1)) * (w - 6) + 3, h - 3 - ((v - mn) / sp) * (h - 6)]); const e = pts[pts.length - 1];
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts.map(p => p.map(n => n.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="${e[0].toFixed(1)}" cy="${e[1].toFixed(1)}" r="2.4" fill="var(--magenta)"/></svg>`; }
+const stat = (k, v, cls = '') => `<div class="stat"><span>${k}</span><b class="${cls}">${v}</b></div>`;
+
+function renderHud() { const G = S.G, hud = $('#hud'), btns = $('#bridge-btns');
+  if (!G) { hud.innerHTML = ''; btns.innerHTML = ''; $('#mode-tag').textContent = '30 HAFTA · 9 LİMAN · 10 HAT'; return; }
+  $('#mode-tag').textContent = G.mode === 'fwd' ? 'ARACI' : 'ARMATÖR';
+  const wk = stat('HAFTA', `${Math.min(G.week, WEEKS)}/${WEEKS}`), goal = tiers(G)[2][0];
+  hud.innerHTML = G.mode === 'fwd'
+    ? wk + stat('KASA', money(G.cash), G.cash < 0 ? 'neg' : '') + stat('YOLDAKİ ALACAK', money(recvF(G))) + stat('İTİBAR', Math.round(G.rep)) + stat('HEDEF', money(goal))
+    : wk + stat('KASA', money(G.cash), G.cash < 0 ? 'neg' : '') + stat('BORÇ', money(G.debt)) + stat('NET DEĞER', money(netC(G))) + stat('YAKIT', `$${G.m.bunker}/t`) + stat('HEDEF', money(goal));
+  btns.innerHTML = `<button class="btn quiet sm" data-act="menu" id="b-menu">Menü</button><button class="btn go" data-act="end" id="b-end" ${S.anim || G.over ? 'disabled' : ''}>HAFTAYI BİTİR</button>`; }
+
+function renderNotices() { const G = S.G, el = $('#notices'), key = $('#key');
+  if (!G) { el.innerHTML = `<span class="kicker">DENİZCİLERE İLAN</span><div class="notice"><span>Gemiler tarifesinde. Bir senaryo seçince piyasa hareketlenir.</span></div>`; key.innerHTML = `<span><i class="sw" style="background:var(--ink)"></i>Hat gemileri</span>`; return; }
+  el.innerHTML = `<span class="kicker">DENİZCİLERE İLAN</span>` + (G.m.ev.length ? G.m.ev.map(e => `<div class="notice"><span class="num">${e.left} HF</span><span><b>${esc(e.title)}.</b> <span class="muted">${esc(e.text)}</span></span></div>`).join('')
+    : `<div class="notice"><span class="muted">Yürürlükte ilan yok. Deniz sakin, navlunlar normal seyrinde.</span></div>`);
+  key.innerHTML = G.mode === 'fwd' ? CARR.map(c => `<span><i class="sw" style="background:var(${c.col})"></i>${c.name}</span>`).join('')
+    : `<span><i class="sw" style="background:var(--magenta)"></i>Gemilerin</span><span><i class="sw" style="border:1.5px solid var(--magenta)"></i>Konumlanıyor</span>`; }
+
+/* ── Aracı sekmeleri ── */
+function offersHTML(G) {
+  const how = `<details class="how"${G.week === 1 ? ' open' : ''}><summary>Nasıl oynanır?</summary><ul>
+    <li>Her talep bir konşimento. Altındaki armatörlerden birine tıklayınca yükü o gemiye yazarsın.</li>
+    <li>Navlunu armatöre hemen ödersin. Müşteri parayı yük teslim edilince öder.</li>
+    <li>Ucuz armatör daha sık rötar yapar. Termin kaçarsa haftada %12 ceza ödersin, itibarın düşer.</li>
+    <li>İtibar yükseldikçe daha çok ve daha büyük talep gelir. Talepler her hafta yenilenir.</li></ul></details>`;
+  if (!G.offers.length) return how + `<div class="empty">Bu haftanın talepleri bitti. Haftayı bitirince yenileri gelir.</div>`;
+  return how + (S.flash ? `<p class="hint" role="status"><b>${esc(S.flash)}</b></p>` : '') + G.offers.map(o => { const l = LM[o.lane], mk = rate(G, l, o.dir), tw = laneWeeks(G, l), revn = offerRev(G, o), slack = o.dl - tw;
+    const k = !o.dir && G.contracts.find(x => x.lane === o.lane && x.cap - x.used >= o.teu);
+    const opts = CARR.filter(c => c.id !== 'B').map(c => { const cost = o.teu * cRate(mk, c), p = revn - cost;
+      return `<button class="carr" data-act="book" data-id="${o.id}" data-c="${c.id}" ${G.cash - cost < -G.credit ? 'disabled' : ''}><b><i class="sw" style="background:var(${c.col})"></i>${c.name}</b><span class="num">${money(cost)} · %${Math.round(c.ok * 100)} dakik</span><span class="num ${p >= 0 ? 'pos' : 'neg'}">Kâr ${signed(p)}</span></button>`; }).join('')
+      + (k ? `<button class="carr" data-act="book" data-id="${o.id}" data-c="B"><b><i class="sw" style="background:var(--c-orange)"></i>Blok yer</b><span class="num">ödendi · %90 dakik</span><span class="num pos">Kâr ${signed(revn)}</span></button>` : '');
+    return `<article class="bl" data-lane="${o.lane}"><div class="bl-head"><span class="num">B/L ${o.no}</span>${o.urgent ? '<span class="stamp">ACİL</span>' : ''}</div>
+      <div class="bl-grid"><div><label>YÜKLEYEN</label>${esc(o.cust)}</div><div><label>EMTİA</label>${esc(o.cargo)}</div>
+      <div><label>YÜKLEME LİMANI</label>${from(l, o.dir)}</div><div><label>TAHLİYE LİMANI</label>${to(l, o.dir)}</div>
+      <div><label>MİKTAR</label><span class="num">${o.teu} TEU</span></div><div><label>NAVLUN</label><span class="num">$${nf.format(o.price)}/TEU · ${money(o.teu * o.price)}</span></div>
+      <div><label>TERMİN</label><span class="num">Hafta ${G.week + o.dl}</span> <span class="muted">(${o.dl} hf)</span></div><div><label>SEFER SÜRESİ</label><span class="num">${tw} hf</span> <span class="${slack > 0 ? 'muted' : 'warn'}">${slack > 0 ? `· ${slack} hf pay` : slack < 0 ? '· termine yetişmez' : '· pay yok'}</span></div></div>
+      <div class="carrs">${opts}</div>
+      <div class="bl-foot"><button class="btn sm" data-act="nego" data-id="${o.id}" ${o.nego ? 'disabled' : ''}>${o.nego ? 'Pazarlık yapıldı' : 'Pazarlık et (+%10)'}</button><button class="btn sm quiet" data-act="reject" data-id="${o.id}">Reddet</button></div></article>`; }).join(''); }
+function shipsHTML(G) { if (!G.sh.length) return `<div class="empty">Yolda sevkiyat yok. Talepler sekmesinden yük bağla.</div>`;
+  return G.sh.slice().sort((a, b) => a.left - b.left).map(s => { const l = LM[s.lane], eta = G.week + s.left, miss = eta > s.due;
+    const pill = miss ? `<span class="pill neg">TERMİN AŞILIYOR</span>` : s.delayed ? `<span class="pill warn">RÖTARLI</span>` : `<span class="pill pos">YOLDA</span>`;
+    return `<article class="card" data-lane="${s.lane}"><div class="card-top"><h3>${esc(s.cust)} <span class="muted">· ${esc(s.cargo)}</span></h3>${pill}</div>
+      <div class="row"><span><i class="sw" style="background:var(${CM[s.c].col})"></i> ${CM[s.c].name}</span><span>${from(l, s.dir)} → ${to(l, s.dir)}</span><span class="num">${s.teu} TEU</span></div>
+      <div class="row"><div class="bar"><i style="width:${Math.round((s.total - s.left) / s.total * 100)}%"></i></div><span class="num">Varış hf ${eta} · termin hf ${s.due}</span><span class="num pos">${money(s.rev)}</span></div>
+      <span class="num muted" style="font-size:11.5px">${s.no}</span></article>`; }).join(''); }
+function marketHTML(G) { const car = G.mode === 'car';
+  return (car ? '' : `<p class="hint">Blok yer anlaşması: ana yönde 8 hafta boyunca haftalık sabit yer. Piyasanın %18 altında fiyat alırsın, kullansan da kullanmasan da ödersin.</p>`)
+  + LANES.map(l => { const k = !car && G.contracts.find(c => c.lane === l.id), r0 = rate(G, l, 0), cr = Math.round(r0 * .82 / 10) * 10, tw = laneWeeks(G, l);
+    let body = '';
+    if (car) { const p = G.price[l.id], mine = G.fleet.filter(s => s.lane === l.id);
+      body = `<div class="row sp"><span class="step"><span class="lbl">FİYATIN</span><button class="btn sm" data-act="price" data-id="${l.id}" data-d="-1" aria-label="Fiyatı düşür" ${p <= .7 ? 'disabled' : ''}>−</button><span class="num">%${Math.round(p * 100)}</span><button class="btn sm" data-act="price" data-id="${l.id}" data-d="1" aria-label="Fiyatı artır" ${p >= 1.4 ? 'disabled' : ''}>+</button></span>
+        <span class="num">$${nf.format(Math.round(r0 * p))} / $${nf.format(Math.round(rate(G, l, 1) * p))}</span></div>
+        <div class="row"><span class="lbl">BEKLEYEN YÜK</span><span class="num">${PORTS[l.a].n} ${nf.format(Math.floor(G.pool[l.id][0]))} TEU <span class="muted">(+${nf.format(Math.round(inflow(G, l, 0)))}/hf)</span></span><span class="num">${PORTS[l.b].n} ${nf.format(Math.floor(G.pool[l.id][1]))} TEU <span class="muted">(+${nf.format(Math.round(inflow(G, l, 1)))}/hf)</span></span></div>
+        ${mine.length ? `<div class="row muted">Gemilerin: ${mine.map(s => s.name).join(', ')}</div>` : ''}`; }
+    else body = k ? `<div class="row sp"><span class="pos">Blok yer: haftada ${k.cap} TEU, $${nf.format(k.rate)}/TEU · ${k.left} hf kaldı · bu hafta ${k.cap - k.used} TEU boş</span></div>`
+      : `<div class="row sp"><span class="muted">Blok yer $${nf.format(cr)}/TEU</span><span class="row"><button class="btn sm" data-act="contract" data-id="${l.id}" data-cap="10" ${G.cash - 10 * cr < -G.credit ? 'disabled' : ''}>10 TEU/hf</button><button class="btn sm" data-act="contract" data-id="${l.id}" data-cap="20" ${G.cash - 20 * cr < -G.credit ? 'disabled' : ''}>20 TEU/hf</button></span></div>`;
+    return `<article class="card" data-lane="${l.id}"><div class="card-top"><h3>${l.name}</h3>${spark(G.m.hist[l.id])}</div>
+      <div class="row"><span>${PORTS[l.a].n} → ${PORTS[l.b].n} <b class="num">$${nf.format(r0)}</b></span><span class="muted">dönüş <b class="num">$${nf.format(rate(G, l, 1))}</b></span><span class="num ${tw > l.weeks ? 'warn' : 'muted'}">${tw} hf sefer</span></div>${body}</article>`; }).join(''); }
+function firmHTML(G) { const hire = 8000;
+  return `<article class="card"><div class="card-top"><h3>Satış temsilcisi</h3><span class="num">${G.reps}/5 kişi</span></div><p class="hint">Her temsilci haftada bir talep daha getirir. İşe alım ${money(hire)}, maaş haftada $1.800.</p>
+    <div class="row"><button class="btn sm" data-act="hire" ${G.reps >= 5 || G.cash < hire ? 'disabled' : ''}>Temsilci işe al · ${money(hire)}</button></div></article>`
+  + Object.entries(FW).map(([k, u]) => `<article class="card"><div class="card-top"><h3>${u.n}</h3>${G.up[k] ? '<span class="pill pos">AKTİF</span>' : `<span class="num">${money(u.cost)} + ${money(u.wk)}/hf</span>`}</div><p class="hint">${u.d}</p>
+    ${G.up[k] ? '' : `<div class="row"><button class="btn sm" data-act="up" data-id="${k}" ${G.cash < u.cost ? 'disabled' : ''}>Satın al</button></div>`}</article>`).join('')
+  + `<h3 class="h3">DEFTER</h3><dl class="kv"><dt>Haftalık sabit gider</dt><dd class="num">${money(fixedF(G))}</dd><dt>Kredi limiti</dt><dd class="num">${money(G.credit)}</dd>
+    <dt>Şirket değeri (kasa + alacak)</dt><dd class="num">${money(valueF(G))}</dd><dt>Teslim edilen</dt><dd class="num">${G.st.del} sevkiyat · ${nf.format(G.st.teu)} TEU</dd><dt>Geç teslim</dt><dd class="num">${G.st.late}</dd></dl>`; }
+
+/* ── Armatör sekmeleri ── */
+function fleetHTML(G) {
+  const how = `<details class="how"${G.week === 1 ? ' open' : ''}><summary>Nasıl oynanır?</summary><ul>
+    <li>Her gemi atandığı hatta iki liman arasında mekik yapar. Kalkışta limanda bekleyen yükü alır, navlun o an kasaya girer.</li>
+    <li>Hatlar sekmesinde fiyatı düşürürsen daha çok yük birikir, yükseltirsen TEU başına daha çok kazanırsın.</li>
+    <li>Yakıt ve mürettebat her hafta ödenir. Ekonomik hız yakıtı %38 düşürür, seferi 1 hafta uzatır.</li>
+    <li>Tersane sekmesinden gemi al, kirala ya da kredi çek. Küçük hatta büyük gemi boş gider.</li></ul></details>`;
+  return how + G.fleet.map(s => { const c = CLS[s.cls], l = s.lane && LM[s.lane];
+    const status = s.state === 'sea' ? `${from(l, s.dir)} → ${to(l, s.dir)} · ${s.left} hf kaldı${s.late ? ' · <span class="neg">rötarlı</span>' : ''}` : s.state === 'repo' ? `${PORTS[l.a].n} limanına konumlanıyor · 1 hf` : 'Limanda bekliyor, hat atanmadı';
+    const sel = s.next !== null ? s.next : (s.lane || '');
+    return `<article class="card" data-lane="${s.lane || ''}"><div class="card-top"><h3>${s.name} <span class="muted">· ${c.n}</span></h3><span class="num">${nf.format(c.cap)} TEU${s.hire ? ` · kira ${money(s.hire)}/hf` : ''}</span></div>
+      <div class="row">${status}</div>
+      ${s.state === 'sea' ? `<div class="row"><div class="bar"><i style="width:${Math.round(s.load / c.cap * 100)}%"></i></div><span class="num">Yük ${nf.format(s.load)} TEU · %${Math.round(s.load / c.cap * 100)}</span></div>` : ''}
+      <div class="row sp"><label><span class="lbl">HAT</span><select data-chg="assign" data-id="${s.id}" id="ln-${s.id}"><option value="">Limanda beklet</option>${LANES.map(x => `<option value="${x.id}" ${sel === x.id ? 'selected' : ''}>${x.name} (${laneWeeks(G, x)} hf)</option>`).join('')}</select></label>
+        <div><span class="lbl">HIZ</span><div class="seg">${Object.entries(SPD).map(([k, v]) => `<button data-act="speed" data-id="${s.id}" data-v="${k}" aria-pressed="${s.speed === k}">${v.n}</button>`).join('')}</div></div></div>
+      ${s.next !== null ? `<div class="row warn">Sefer bitince: ${s.next ? LM[s.next].name : 'limanda bekleyecek'}</div>` : ''}
+      <div class="row sp"><span class="muted num">Yakıt ${money(c.fuel * 7 * G.m.bunker * SPD[s.speed].fm)}/hf · işletme ${money(c.opex)}/hf</span>
+        ${s.hire ? `<button class="btn sm quiet" data-act="ret" data-id="${s.id}" ${G.week < s.until ? 'disabled' : ''}>${G.week < s.until ? `İade hf ${s.until}` : 'Gemiyi iade et'}</button>` : `<button class="btn sm quiet" data-act="sell" data-id="${s.id}" ${G.fleet.length < 2 ? 'disabled' : ''}>Sat · ${money(shipVal(G, s) * .95)}</button>`}</div></article>`; }).join(''); }
+function yardHTML(G) { const cap = loanCap(G), full = G.fleet.length >= 8;
+  return `<p class="hint">İlanlar her hafta değişir. Kiralık gemi sermaye istemez ama en az 6 hafta elinde kalır. Filo en çok 8 gemi olabilir.</p>`
+  + G.list.map(x => { const c = CLS[x.cls], sale = x.type === 'sale';
+    return `<article class="card"><div class="card-top"><h3>${c.n} <span class="muted">· ${sale ? 'satılık' : 'kiralık'}</span></h3><span class="num">${nf.format(c.cap)} TEU</span></div>
+      <div class="row sp"><span class="num muted">Yakıt ${c.fuel} t/gün · işletme ${money(c.opex)}/hf</span>
+      <button class="btn sm" data-act="${sale ? 'buy' : 'charter'}" data-id="${x.id}" ${full || (sale && G.cash < x.price) ? 'disabled' : ''}>${sale ? `Satın al · ${money(x.price)}` : `Kirala · ${money(x.price)}/hf`}</button></div></article>`; }).join('')
+  + `<h3 class="h3">BANKA</h3><article class="card"><div class="card-top"><h3>Gemi ipoteği karşılığı kredi</h3><span class="num">${money(G.debt)} / ${money(cap)}</span></div><p class="hint">Limit, sahip olduğun filonun değerinin yarısı. Faiz haftalık %0,3.</p>
+    <div class="row"><button class="btn sm" data-act="loan" data-d="1" ${G.debt + 1e6 > cap ? 'disabled' : ''}>$1 Mn çek</button><button class="btn sm" data-act="loan" data-d="-1" ${G.debt < 1e6 || G.cash < 1e6 ? 'disabled' : ''}>$1 Mn öde</button></div></article>
+    <h3 class="h3">BİLANÇO</h3><dl class="kv"><dt>Kasa</dt><dd class="num">${money(G.cash)}</dd><dt>Filo değeri (sahip olunan)</dt><dd class="num">${money(fleetVal(G))}</dd><dt>Kredi borcu</dt><dd class="num">${money(-G.debt)}</dd>
+    <dt>Net değer</dt><dd class="num"><b>${money(netC(G))}</b></dd><dt>Ortalama doluluk</dt><dd class="num">%${G.st.cap ? Math.round(G.st.teu / G.st.cap * 100) : 0}</dd><dt>Hat güvenilirliği</dt><dd class="num">${Math.round(G.rep)}/100</dd></dl>`; }
+const logHTML = G => G.log.length ? `<ul class="log">${G.log.map(e => `<li><span class="num">HF ${e.w}</span><span class="${e.tone === 'bad' ? 'neg' : ''}">${e.tone === 'ev' ? '<b>' + esc(e.t) + '</b>' : esc(e.t)}</span></li>`).join('')}</ul>` : `<div class="empty">Henüz kayıt yok. İlk haftayı bitirince olaylar burada birikir.</div>`;
+
+function startHTML() { const sv = store.get();
+  return `<div class="intro"><span class="kicker">KONTEYNER TAŞIMACILIĞI STRATEJİ OYUNU</span><h1>Aynı deniz, iki ayrı masa.</h1>
+  <p>Bir masada yükü bulup gemide yer arayan aracısın, ötekinde gemiyi dolduracak yük arayan armatör. Otuz hafta boyunca navlun piyasası, liman grevleri ve Süveyş ikisini de sınar.</p>
+  <div class="scen">
+   <article><span class="role">SENARYO 1 · FREIGHT FORWARDER</span><h2>ARACI</h2><p>Gemin yok, müşterin var. İhracatçıdan yükü al, armatörden yer satın al, aradaki farkla yaşa.</p>
+    <ul><li>Navlunu armatöre peşin ödersin, müşteri teslimde öder.</li><li>Ucuz armatör rötar yapar. Termin kaçarsa ceza ve itibar kaybı gelir.</li><li>Hedef: 30. haftada ${money(F_TIERS[2][0])} şirket değeri.</li></ul>
+    <button class="btn go" data-act="start" data-m="fwd">ARACI OLARAK BAŞLA</button></article>
+   <article><span class="role">SENARYO 2 · HAT OPERATÖRÜ</span><h2>ARMATÖR</h2><p>İki gemin ve bir kredi limitin var. Gemileri hatlara ver, navlunu belirle, yakıtı ve boş dönüşü hesapla.</p>
+    <ul><li>Dolu gemi kazandırır. Bekleyen yüke göre gemi ve fiyat seç.</li><li>Gemi al, kirala, hız ayarla. Yakıt her hafta kasadan çıkar.</li><li>Hedef: 30. haftada ${money(C_TIERS[2][0])} net değer.</li></ul>
+    <button class="btn go" data-act="start" data-m="car">ARMATÖR OLARAK BAŞLA</button></article>
+  </div>
+  ${sv && !sv.over ? `<div class="resume"><button class="btn" data-act="resume">Kayıtlı oyuna devam et</button><span class="muted">${sv.mode === 'fwd' ? 'Aracı' : 'Armatör'} · hafta ${sv.week}/${WEEKS}</span></div>` : ''}</div>`; }
+
+function renderDesk() { const G = S.G, desk = $('#desk');
+  if (!G) { desk.innerHTML = startHTML(); return; }
+  const tabs = tabsFor(G); if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
+  const body = {offers: offersHTML, ships: shipsHTML, market: marketHTML, firm: firmHTML, fleet: fleetHTML, lanes: marketHTML, yard: yardHTML, log: logHTML}[S.tab](G);
+  desk.innerHTML = `<div class="tabs" role="tablist">${tabs.map(([k, n, c]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${S.tab === k}" data-act="tab" data-id="${k}">${n}${c !== undefined ? `<span class="num">${c}</span>` : ''}</button>`).join('')}</div><div class="panel" role="tabpanel">${body}</div>`; }
+function render() { renderHud(); renderNotices(); renderDesk(); draw(); }
+
+/* ── Rapor ve bitiş ── */
+function showReport(R) { const G = S.G, net = R.inc - R.exp;
+  $('#dlg').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-h"><span class="kicker">HAFTA SONU RAPORU</span><h2 id="dlg-h">HAFTA ${R.week}</h2>
+    ${R.news.map(n => `<div class="news"><b>${esc(n.title)}</b><span>${esc(n.text)}</span></div>`).join('')}
+    ${R.lines.length ? `<ul class="ledger">${R.lines.map(l => `<li><span class="${l.tone === 'bad' ? 'neg' : ''}">${esc(l.t)}</span>${l.a !== undefined ? `<span class="num ${l.a >= 0 ? 'pos' : 'neg'}">${signed(l.a)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+    <div class="totals">${stat('GELİR', money(R.inc))}${stat('GİDER', money(R.exp))}${stat('HAFTA NETİ', signed(net), net >= 0 ? 'pos' : 'neg')}</div>
+    <div class="sheet-foot"><button class="btn go" data-act="${G.over ? 'final' : 'close'}" id="dlg-ok">${G.over ? 'SONUCU GÖR' : 'DEVAM'}</button></div></div>`;
+  $('#dlg').hidden = false; $('#dlg-ok').focus(); }
+function showFinal() { const G = S.G, v = score(G), ts = tiers(G), got = ts.filter(t => v >= t[0]).pop(), bust = G.over === 'bust';
+  const head = bust ? 'İFLAS' : got ? got[1].toLocaleUpperCase('tr') : 'HEDEFİN ALTINDA';
+  const msg = bust ? (G.mode === 'fwd' ? 'Kasa kredi limitinin altına düştü. Peşin ödenen navlunlar teslimattan önce kasayı kuruttu.' : 'Kasa açığı $2 milyonu aştı, banka gemilere el koydu.')
+    : got ? `30 haftayı ${money(v)} ${G.mode === 'fwd' ? 'şirket değeriyle' : 'net değerle'} kapattın.` : `30 haftayı ${money(v)} ile kapattın. İlk eşik ${money(ts[0][0])}.`;
+  const facts = G.mode === 'fwd' ? `<dt>Teslim edilen</dt><dd class="num">${G.st.del} sevkiyat · ${nf.format(G.st.teu)} TEU</dd><dt>Geç teslim</dt><dd class="num">${G.st.late}</dd><dt>İtibar</dt><dd class="num">${Math.round(G.rep)}/100</dd>`
+    : `<dt>Filo</dt><dd class="num">${G.fleet.length} gemi · ${nf.format(G.fleet.reduce((s, x) => s + CLS[x.cls].cap, 0))} TEU</dd><dt>Taşınan yük</dt><dd class="num">${nf.format(G.st.teu)} TEU · %${G.st.cap ? Math.round(G.st.teu / G.st.cap * 100) : 0} doluluk</dd><dt>Rötarlı sefer</dt><dd class="num">${G.st.late}/${G.st.voy}</dd>`;
+  $('#dlg').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-h"><span class="kicker">${G.mode === 'fwd' ? 'ARACI' : 'ARMATÖR'} · SEFER SONU</span><h2 id="dlg-h" class="big">${head}</h2><p>${msg}</p>
+    <div style="color:var(--ink)">${spark(G.hist, 320, 70).replace('width="320"', 'width="100%" preserveAspectRatio="none"')}</div>
+    <dl class="kv">${ts.map(t => `<dt>${t[1]}</dt><dd class="num ${v >= t[0] && !bust ? 'pos' : 'muted'}">${money(t[0])} ${v >= t[0] && !bust ? '✓' : ''}</dd>`).join('')}${facts}</dl>
+    <div class="sheet-foot"><button class="btn" data-act="home">Senaryo seç</button><button class="btn go" data-act="start" data-m="${G.mode}" id="dlg-ok">YENİDEN OYNA</button></div></div>`;
+  $('#dlg').hidden = false; $('#dlg-ok').focus(); }
+function showMenu() { $('#dlg').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-h"><h2 id="dlg-h">MENÜ</h2><p class="muted">Oyun her hafta sonunda bu tarayıcıya kaydedilir.</p>
+  <div class="sheet-foot" style="justify-content:flex-start"><button class="btn go" data-act="close" id="dlg-ok">OYUNA DÖN</button><button class="btn" data-act="start" data-m="${S.G.mode}">Baştan başla</button><button class="btn" data-act="home">Senaryo seçimine dön</button></div></div>`;
+  $('#dlg').hidden = false; $('#dlg-ok').focus(); }
+
+/* ───────── Harita ───────── */
+const cv = $('#cv'), cx = cv.getContext('2d'); let W = 0, H = 0, dpr = 1, landLayer = null, col = {};
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const px = (lon, lat) => [(lon - VIEW.lon0) / 280 * W, (VIEW.lat1 - lat) / 104 * H];
+function readCols() { const cs = getComputedStyle(document.documentElement); ['sea', 'paper', 'land', 'ink', 'muted', 'line', 'depth', 'magenta', 'c-red', 'c-blue', 'c-green', 'c-orange'].forEach(k => col[k] = cs.getPropertyValue('--' + k).trim()); }
+function buildLand() { readCols(); landLayer = document.createElement('canvas'); landLayer.width = W * dpr; landLayer.height = H * dpr; const c = landLayer.getContext('2d'); c.scale(dpr, dpr);
+  c.fillStyle = col.sea; c.fillRect(0, 0, W, H);
+  c.strokeStyle = col.line; c.lineWidth = .6; c.globalAlpha = .7; c.beginPath();
+  for (let lon = -120; lon <= 150; lon += 30) { const x = px(lon, 0)[0]; c.moveTo(x, 0); c.lineTo(x, H); }
+  for (let lat = -30; lat <= 60; lat += 30) { const y = px(0, lat)[1]; c.moveTo(0, y); c.lineTo(W, y); } c.stroke(); c.globalAlpha = 1;
+  c.fillStyle = col.land; const r = Math.max(.9, W / 280 * 1.75 * .36); c.beginPath();
+  DOTS.forEach(d => { const [x, y] = px(d[0], d[1]); c.moveTo(x + r, y); c.arc(x, y, r, 0, 6.2832); }); c.fill();
+  if (W >= 560) { c.fillStyle = col.depth; c.font = `500 ${W >= 760 ? 10 : 9}px ${getComputedStyle(document.body).fontFamily}`; c.textAlign = 'center'; if ('letterSpacing' in c) c.letterSpacing = '3px';
+    [['ATLAS OKYANUSU', -47, 26], ['HİNT OKYANUSU', 84, -27], ['PASİFİK', 136, 17], ['PASİFİK', -112, 14]].forEach(([t, lo, la]) => { const [x, y] = px(lo, la); c.fillText(t, x, y); }); } }
+function resize() { const w = cv.parentElement.clientWidth; if (!w) return; W = w; H = Math.round(w / 2); dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px'; buildLand(); draw(); }
+function trace(l) { let pen = false; cx.beginPath(); for (const p of l.path) { if (!p) { pen = false; continue; } const [x, y] = px(p[0], p[1]); pen ? cx.lineTo(x, y) : cx.moveTo(x, y); pen = true; } }
+function markers() { const G = S.G, out = [];
+  if (!G) { LANES.forEach((l, i) => { const t = (S.demoT / (l.weeks * 9) + i * .37) % 2; out.push({id: 'd' + i, lane: l.id, dir: t > 1 ? 1 : 0, f: t > 1 ? t - 1 : t, col: col.ink, kind: 'ship'}); }); return out; }
+  if (G.mode === 'fwd') G.sh.forEach(s => out.push({id: s.id, lane: s.lane, dir: s.dir, f: clamp((s.total - s.left) / s.total, .02, .98), col: col[CM[s.c].col.slice(2)], kind: 'box'}));
+  else G.fleet.forEach(s => { if (!s.lane) return; out.push({id: s.id, lane: s.lane, dir: s.dir, f: s.state === 'sea' ? clamp((s.total - s.left) / s.total, .02, .98) : 0, col: col.magenta, kind: s.state === 'sea' ? 'ship' : 'wait', big: CLS[s.cls].cap > 3000}); });
+  return out; }
+function draw() { if (!W) return; cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.drawImage(landLayer, 0, 0, W, H);
+  const G = S.G, active = new Set(G ? (G.mode === 'fwd' ? G.sh.map(s => s.lane) : G.fleet.map(s => s.lane)) : []);
+  cx.lineJoin = 'round';
+  LANES.forEach(l => { if (l.id === S.hi) return; trace(l); const on = active.has(l.id); cx.strokeStyle = on ? col.ink : col.depth; cx.globalAlpha = on ? .75 : .9; cx.lineWidth = on ? 1.1 : .9; cx.setLineDash(on ? [] : [2, 3]); cx.stroke(); });
+  cx.setLineDash([]); cx.globalAlpha = 1;
+  if (S.hi) { trace(LM[S.hi]); cx.strokeStyle = col.magenta; cx.lineWidth = 2; cx.stroke(); }
+  // gemiler / yükler
+  const k = S.anim ? Math.min(1, (performance.now() - S.anim) / 800) : 1, ease = k * k * (3 - 2 * k), seen = {};
+  markers().forEach(m => { const l = LM[m.lane]; let f = m.f; const p0 = S.prev && S.prev[m.id];
+    if (k < 1 && p0 && p0.lane === m.lane && p0.dir === m.dir && p0.f < f) f = p0.f + (f - p0.f) * ease;
+    const p = posAt(l, m.dir ? 1 - f : f), [x, y] = px(p.lon, p.lat), ang = m.dir ? p.ang + Math.PI : p.ang;
+    const key = Math.round(x / 6) + ',' + Math.round(y / 6), n = seen[key] = (seen[key] || 0) + 1, off = (n - 1) * 5;
+    cx.save(); cx.translate(x, y - off); cx.rotate(ang); cx.fillStyle = m.col; cx.strokeStyle = col.sea; cx.lineWidth = 1.2;
+    if (m.kind === 'box') { cx.fillRect(-4.5, -3, 9, 6); cx.strokeRect(-4.5, -3, 9, 6); }
+    else { const s = m.big ? 1.3 : 1; cx.beginPath(); cx.moveTo(7 * s, 0); cx.lineTo(2.5 * s, -3.2 * s); cx.lineTo(-6 * s, -3.2 * s); cx.lineTo(-6 * s, 3.2 * s); cx.lineTo(2.5 * s, 3.2 * s); cx.closePath();
+      if (m.kind === 'wait') { cx.fillStyle = col.sea; cx.fill(); cx.strokeStyle = m.col; cx.lineWidth = 1.5; cx.stroke(); } else { cx.fill(); cx.stroke(); } }
+    cx.restore(); });
+  // limanlar
+  const narrow = W < 520, hl = S.hi && LM[S.hi]; cx.font = `600 ${narrow ? 9.5 : 11.5}px ${getComputedStyle(document.body).fontFamily}`; cx.textBaseline = 'middle';
+  Object.entries(PORTS).forEach(([id, p]) => { const [x, y] = px(p.lon, p.lat), on = hl && (hl.a === id || hl.b === id);
+    cx.beginPath(); cx.arc(x, y, on ? 4.5 : 3.4, 0, 6.2832); cx.fillStyle = on ? col.magenta : col.paper; cx.fill(); cx.strokeStyle = on ? col.magenta : col.ink; cx.lineWidth = 1.5; cx.stroke();
+    const t = narrow ? id : p.n; let tx = x, ty = y; cx.textAlign = 'center';
+    if (p.lab === 'r') { tx = x + 8; cx.textAlign = 'left'; } else if (p.lab === 't') ty = y - 11; else ty = y + 12;
+    cx.lineWidth = 3; cx.strokeStyle = col.sea; cx.strokeText(t, tx, ty); cx.fillStyle = col.ink; cx.fillText(t, tx, ty); });
+  if (k < 1) requestAnimationFrame(draw); else if (S.anim) { S.anim = null; S.prev = null; if (S.after) { const f = S.after; S.after = null; f(); } } }
+let demoRaf = 0, demoLast = 0;
+function demoTick(t) { if (S.G) { demoRaf = 0; return; } if (t - demoLast > 40) { S.demoT += Math.min(.1, (t - demoLast) / 1000); demoLast = t; draw(); } demoRaf = requestAnimationFrame(demoTick); }
+function demo() { if (!S.G && !reduced.matches && !demoRaf) { demoLast = performance.now(); demoRaf = requestAnimationFrame(demoTick); } }
+
+/* ───────── Eylemler ───────── */
+function endWeek() { const G = S.G; if (!G || G.over || S.anim) return; S.flash = '';
+  S.prev = Object.fromEntries(markers().map(m => [m.id, m]));
+  const R = G.mode === 'fwd' ? endWeekF(G) : endWeekC(G); store.set(G.over ? null : G);
+  const done = () => { render(); showReport(R); };
+  if (reduced.matches) { S.prev = null; done(); } else { S.anim = performance.now(); S.after = done; renderHud(); draw(); } }
+function start(mode) { S.G = mode === 'fwd' ? newForwarder() : newCarrier(); S.tab = ''; S.flash = ''; S.hi = null; $('#dlg').hidden = true; store.set(S.G); render(); window.scrollTo(0, 0); }
+const ACT = {
+  start: d => start(d.m), resume: () => { const g = store.get(); if (g) { S.G = g; S.tab = ''; render(); } },
+  home: () => { S.G = null; S.hi = null; $('#dlg').hidden = true; render(); demo(); }, menu: showMenu,
+  close: () => { $('#dlg').hidden = true; const b = $('#b-end'); if (b) b.focus(); }, final: showFinal, end: endWeek,
+  tab: d => { S.tab = d.id; S.flash = ''; },
+  book: d => book(S.G, +d.id, d.c), reject: d => { S.G.offers = S.G.offers.filter(o => o.id !== +d.id); }, nego: d => { S.flash = nego(S.G, +d.id); },
+  contract: d => buyContract(S.G, d.id, +d.cap), hire: () => { const G = S.G; if (G.reps < 5 && G.cash >= 8000) { G.cash -= 8000; G.reps++; } },
+  up: d => { const G = S.G, u = FW[d.id]; if (!G.up[d.id] && G.cash >= u.cost) { G.cash -= u.cost; G.up[d.id] = true; } },
+  price: d => { const G = S.G; G.price[d.id] = clamp(Math.round((G.price[d.id] + d.d * .05) * 100) / 100, .7, 1.4); },
+  speed: d => { const s = S.G.fleet.find(x => x.id === +d.id); if (s) { s.speed = d.v; if (s.state !== 'sea') s.vs = d.v; } },
+  buy: d => { const G = S.G, x = G.list.find(o => o.id === +d.id); if (x && G.cash >= x.price && G.fleet.length < 8) { G.cash -= x.price; G.fleet.push(mkShip(G, x.cls)); G.list = G.list.filter(o => o !== x); S.tab = 'fleet'; } },
+  charter: d => { const G = S.G, x = G.list.find(o => o.id === +d.id); if (x && G.fleet.length < 8) { G.fleet.push(mkShip(G, x.cls, x.price)); G.list = G.list.filter(o => o !== x); S.tab = 'fleet'; } },
+  sell: d => { const G = S.G, s = G.fleet.find(x => x.id === +d.id); if (s && !s.hire && G.fleet.length > 1) { G.cash += shipVal(G, s) * .95; G.fleet = G.fleet.filter(x => x !== s); } },
+  ret: d => { const G = S.G, s = G.fleet.find(x => x.id === +d.id); if (s && s.hire && G.week >= s.until) G.fleet = G.fleet.filter(x => x !== s); },
+  loan: d => { const G = S.G; if (+d.d > 0 && G.debt + 1e6 <= loanCap(G)) { G.debt += 1e6; G.cash += 1e6; } else if (+d.d < 0 && G.debt >= 1e6 && G.cash >= 1e6) { G.debt -= 1e6; G.cash -= 1e6; } },
+};
+document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b || b.disabled) return; const a = b.dataset.act; ACT[a](b.dataset);
+  if (!['end', 'menu', 'final', 'start', 'home', 'resume', 'close'].includes(a)) { const id = b.id; render(); if (id) { const n = document.getElementById(id); if (n) n.focus(); } } });
+document.addEventListener('change', e => { const s = e.target.closest('[data-chg]'); if (!s) return; assign(S.G, +s.dataset.id, s.value); const id = s.id; render(); const n = document.getElementById(id); if (n) n.focus(); });
+const setHi = id => { if (id === S.hi) return; S.hi = id; $('#hi-name').textContent = id ? LM[id].name : ''; draw(); };
+$('#desk').addEventListener('pointerover', e => { const c = e.target.closest('[data-lane]'); setHi(c && c.dataset.lane ? c.dataset.lane : null); });
+$('#desk').addEventListener('pointerleave', () => setHi(null));
+$('#desk').addEventListener('focusin', e => { const c = e.target.closest('[data-lane]'); if (c && c.dataset.lane) setHi(c.dataset.lane); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#dlg').hidden && S.G && !S.G.over) ACT.close(); });
+
+new ResizeObserver(resize).observe(cv.parentElement);
+new ResizeObserver(() => document.documentElement.style.setProperty('--hud-h', $('#bridge').offsetHeight + 'px')).observe($('#bridge'));
+const retheme = () => { if (W) { buildLand(); draw(); } };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+new MutationObserver(retheme).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(retheme);
+
+window.KONSIMENTO = {S, start, endWeek, book, score, LANES, CARR, CLS, ACT, laneWeeks, rate, assign, loanCap};
+function boot(data) { if (data && data.G) { S.G = data.G; S.tab = data.tab || ''; } render(); resize(); demo(); }
+const hot = window.claude && window.claude.hot;
+if (hot && hot.snapshot) hot.snapshot(() => ({G: S.G, tab: S.tab}));
+if (hot && hot.ready) hot.ready(boot); else boot((hot && hot.data) || {});
+})();
+</script>
